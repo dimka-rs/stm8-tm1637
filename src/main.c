@@ -3,6 +3,11 @@
 #include "main.h"
 
 /* Private defines -----------------------------------------------------------*/
+#define CLK_H GPIO_WriteHigh(GPIOB, GPIO_PIN_4)
+#define CLK_L GPIO_WriteLow(GPIOB, GPIO_PIN_4)
+#define DIO_H GPIO_WriteHigh(GPIOB, GPIO_PIN_5)
+#define DIO_L GPIO_WriteLow(GPIOB, GPIO_PIN_5)
+#define DELAY for (volatile uint8_t i = 0; i < 25; i++)
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -11,63 +16,60 @@
 static void
 SendStart()
 {
-    //Clock must be high already
-    GPIO_WriteLow(GPIOB, GPIO_PIN_5); //DATA Low
-    for (volatile uint8_t i = 0; i < 255; i++);
-    GPIO_WriteLow(GPIOB, GPIO_PIN_4); //CLK Low
+    DIO_H;
+    DIO_L;
 }
 
 static void
 SendStop()
 {
-    //Clock is low after reading ack
-    GPIO_WriteLow(GPIOB, GPIO_PIN_5); //DATA Low
-    GPIO_WriteHigh(GPIOB, GPIO_PIN_4); //CLK High
-    GPIO_WriteHigh(GPIOB, GPIO_PIN_5); //DATA High
-    for (volatile uint8_t i = 0; i < 255; i++);
+    CLK_L;
+    DIO_L;
+    CLK_H;
+    DIO_H;
+    DELAY;
 }
 
 static void
 ReadAck()
 {
-    // just tristate data pin
-    GPIO_WriteHigh(GPIOB, GPIO_PIN_5); // Data High
-    GPIO_WriteHigh(GPIOB, GPIO_PIN_4); //CLK High
-    for (volatile uint8_t i = 0; i < 255; i++);
-    GPIO_WriteLow(GPIOB, GPIO_PIN_4); //CLK Low
+    CLK_L;
+    DIO_H;
+    CLK_H;
+    // read here
+    DIO_L; // prevent dio going high
 }
 
 static void
 SendByte(uint8_t byte)
 {
-    for (uint8_t i = 0; i < 8; i++)
+    for(uint8_t i = 0; i < 8; i++)
     {
-        byte & 0x80 > 0 ? GPIO_WriteHigh(GPIOB, GPIO_PIN_5) : GPIO_WriteLow(GPIOB, GPIO_PIN_5);
-        GPIO_WriteHigh(GPIOB, GPIO_PIN_4); //CLK High
-        for (volatile uint8_t i = 0; i < 255; i++);
-        GPIO_WriteLow(GPIOB, GPIO_PIN_4); //CLK Low
-        byte << 1;
+        CLK_L;
+        (byte & (1 << i)) != 0 ? DIO_H : DIO_L;
+        CLK_H;
     }
     ReadAck();
 }
 
-
-
 static void
 Send_BitBang(void)
 {
+    static uint8_t i = 0;
+    i++;
+
     SendStart();
     SendByte(0x40); // addr autoincrement
     SendStop();
 
     SendStart();
     SendByte(0xC0); // start with row 0
-    SendByte(0xAA); // 6 bytes of data
-    SendByte(0x55);
-    SendByte(0xAA);
-    SendByte(0x55);
-    SendByte(0xAA);
-    SendByte(0x55);
+    SendByte(i); // 6 bytes of data
+    SendByte(i);
+    SendByte(i);
+    SendByte(i);
+    SendByte(i);
+    SendByte(i);
     SendStop();
 
     SendStart();
@@ -119,7 +121,7 @@ main(void)
         UART1_SendData8('A');
         //Send_I2C();
         Send_BitBang();
-        for (volatile uint32_t i = 0; i < 100000; i++);
+        for (volatile uint32_t i = 0; i < 10000; i++);
     }
 }
 
