@@ -1,110 +1,27 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm8s.h"
+#include "tm1637.h"
+#include "string.h" /* memset */
 #include "main.h"
 
 /* Private defines -----------------------------------------------------------*/
-#define CLK_H GPIO_WriteHigh(GPIOB, GPIO_PIN_4)
-#define CLK_L GPIO_WriteLow(GPIOB, GPIO_PIN_4)
-#define DIO_H GPIO_WriteHigh(GPIOB, GPIO_PIN_5)
-#define DIO_L GPIO_WriteLow(GPIOB, GPIO_PIN_5)
-#define DELAY for (volatile uint8_t i = 0; i < 25; i++)
 
 /* Private function prototypes -----------------------------------------------*/
 
 /* Private functions ---------------------------------------------------------*/
 
-static void
-SendStart()
-{
-    DIO_H;
-    DIO_L;
-}
 
-static void
-SendStop()
-{
-    CLK_L;
-    DIO_L;
-    CLK_H;
-    DIO_H;
-    DELAY;
-}
-
-static void
-ReadAck()
-{
-    CLK_L;
-    DIO_H;
-    CLK_H;
-    // read here
-    DIO_L; // prevent dio going high
-}
-
-static void
-SendByte(uint8_t byte)
-{
-    for(uint8_t i = 0; i < 8; i++)
-    {
-        CLK_L;
-        (byte & (1 << i)) != 0 ? DIO_H : DIO_L;
-        CLK_H;
-    }
-    ReadAck();
-}
-
-static void
-Send_BitBang(void)
-{
-    static uint8_t i = 0;
-    i++;
-
-    SendStart();
-    SendByte(0x40); // addr autoincrement
-    SendStop();
-
-    SendStart();
-    SendByte(0xC0); // start with row 0
-    SendByte(i); // 6 bytes of data
-    SendByte(i);
-    SendByte(i);
-    SendByte(i);
-    SendByte(i);
-    SendByte(i);
-    SendStop();
-
-    SendStart();
-    SendByte(0x8C); //display control: ON, 11/16
-    SendStop();
-}
-
-static void
-Send_I2C(void)
-{
-    I2C_GenerateSTART(ENABLE); for (volatile uint8_t i = 0; i < 255; i++) ;I2C_GenerateSTART(DISABLE);
-    I2C_SendData(0x40); // addr autoincrement
-    I2C_GenerateSTOP(ENABLE); for (volatile uint8_t i = 0; i < 255; i++); I2C_GenerateSTOP(DISABLE);
-
-    I2C_GenerateSTART(ENABLE); for (volatile uint8_t i = 0; i < 255; i++); I2C_GenerateSTART(DISABLE);
-    I2C_SendData(0xC0); // start with row 0
-    I2C_SendData(0xAA); // 6 bytes of data
-    I2C_SendData(0x55);
-    I2C_SendData(0xAA);
-    I2C_SendData(0x55);
-    I2C_SendData(0xAA);
-    I2C_SendData(0x55);
-    I2C_GenerateSTOP(ENABLE); for (volatile uint8_t i = 0; i < 255; i++); I2C_GenerateSTOP(DISABLE);
-
-    I2C_GenerateSTART(ENABLE); for (volatile uint8_t i = 0; i < 255; i++); I2C_GenerateSTART(DISABLE);
-    I2C_SendData(0x8C); //display control: ON, 11/16
-    I2C_GenerateSTOP(ENABLE); for (volatile uint8_t i = 0; i < 255; i++); I2C_GenerateSTOP(DISABLE);
-}
 
 void
 main(void)
 {
+    uint8_t data[6] = {0};
+    uint8_t brightness = 0; /* 0 to 9, 0 - display off */
+
     /* GPIO */
     GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_OD_HIZ_SLOW);
     GPIO_Init(GPIOB, GPIO_PIN_5, GPIO_MODE_OUT_OD_HIZ_SLOW);
+    GPIO_Init(GPIOA, GPIO_PIN_1, GPIO_MODE_IN_PU_NO_IT);
 
     /* UART */
     UART1_Init(115200, UART1_WORDLENGTH_8D, UART1_STOPBITS_1, UART1_PARITY_NO,
@@ -117,11 +34,16 @@ main(void)
 
     while (1)
     {
-
+        while(GPIO_ReadInputPin(GPIOA, GPIO_PIN_1) == 0); //test button
         UART1_SendData8('A');
-        //Send_I2C();
-        Send_BitBang();
-        for (volatile uint32_t i = 0; i < 10000; i++);
+        tm1637_display(&data[0], sizeof(data), brightness);
+        brightness++;
+        if (brightness > 8)
+        {
+            brightness = 0;
+        }
+        memset(&data[0], 1 << (brightness-1), sizeof(data));
+        for (volatile uint32_t i = 0; i < 100000; i++);
     }
 }
 
