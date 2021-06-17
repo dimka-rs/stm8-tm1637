@@ -1,5 +1,6 @@
 #include "stm8s.h"
 #include "stddef.h"
+#include "tm1637.h"
 
 #define CLK_H GPIO_WriteHigh(GPIOB, GPIO_PIN_4)
 #define CLK_L GPIO_WriteLow(GPIOB, GPIO_PIN_4)
@@ -46,6 +47,12 @@ SendByte(uint8_t byte)
     ReadAck();
 }
 
+/*
+    @brief show up to 6 bytes on display
+    @param data data to display
+    @param len data length, 1 to 6
+    @param brightness 0 to 8, where 0 is display off
+ */
 void
 tm1637_display(uint8_t *data, uint8_t len, uint8_t brightness)
 {

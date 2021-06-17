@@ -1,6 +1,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm8s.h"
 #include "tm1637.h"
+#include "mytime.h"
 #include "string.h" /* memset */
 #include "main.h"
 
@@ -10,13 +11,12 @@
 
 /* Private functions ---------------------------------------------------------*/
 
-
-
 void
 main(void)
 {
+    mytime_t time = {.h = 0, .m = 0, .s = 0};
     uint8_t data[6] = {0};
-    uint8_t brightness = 0; /* 0 to 9, 0 - display off */
+    uint8_t brightness = 5;
 
     /* GPIO */
     GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_OD_HIZ_SLOW);
@@ -36,14 +36,12 @@ main(void)
     {
         while(GPIO_ReadInputPin(GPIOA, GPIO_PIN_1) == 0); //test button
         UART1_SendData8('A');
+
+        increment_time(&time);
+        encode_time(&time, &data[0]);
         tm1637_display(&data[0], sizeof(data), brightness);
-        brightness++;
-        if (brightness > 8)
-        {
-            brightness = 0;
-        }
-        memset(&data[0], 1 << (brightness-1), sizeof(data));
-        for (volatile uint32_t i = 0; i < 100000; i++);
+
+        for (volatile uint32_t i = 0; i < 1000; i++);
     }
 }
 
